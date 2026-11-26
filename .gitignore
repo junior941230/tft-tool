@@ -1,0 +1,26 @@
+# Rust 編譯輸出
+/target/
+
+# rustfmt 備份檔
+**/*.rs.bk
+
+# 除錯符號（Windows）
+*.pdb
+
+# 編輯器 / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# 作業系統產生的檔案
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 暫存檔
+*.tmp
+*.log
+
+# Claude Code 本機設定（可能含個人權限設定）
+.claude/settings.local.json
