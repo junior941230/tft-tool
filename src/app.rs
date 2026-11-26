@@ -80,6 +80,9 @@ pub struct App {
     /// 英雄／裝備詳細資料
     pub entities: HashMap<EntityKey, EntityDetail>,
     ent_requested: HashSet<EntityKey>,
+    ent_loader: net::EntityLoader,
+    /// 已經排過預載的篩選條件
+    prefetched: HashSet<Filter>,
     pub ent_pending: HashSet<EntityKey>,
     pub ent_errors: HashMap<EntityKey, String>,
     zoom: f32,
@@ -128,6 +131,8 @@ impl App {
             comps: HashMap::new(),
             entities: HashMap::new(),
             ent_requested: HashSet::new(),
+            ent_loader: net::EntityLoader::new(tx.clone(), ctx.clone(), 6),
+            prefetched: HashSet::new(),
             ent_pending: HashSet::new(),
             ent_errors: HashMap::new(),
             zoom: cache::load("zoom.bin").unwrap_or(DEFAULT_ZOOM),
@@ -218,7 +223,37 @@ impl App {
         }
         if self.ent_requested.insert(k.clone()) {
             self.ent_pending.insert(k.clone());
-            net::fetch_entity(k.clone(), self.tx.clone(), self.ctx.clone());
+            self.ent_loader.push_front(k.clone());
+        } else if !self.entities.contains_key(k) && self.ent_pending.contains(k) {
+            // 還在預載佇列裡排隊：移到最前面
+            self.ent_loader.push_front(k.clone());
+        }
+    }
+
+    /// 統計資料到了以後，把這個條件下所有英雄和裝備的詳細資料排進背景佇列，
+    /// 之後點開就不用等。
+    fn prefetch_entities(&mut self) {
+        let f = self.filter;
+        let Some(stats) = self.stats.get(&f) else { return };
+        if !self.prefetched.insert(f) {
+            return;
+        }
+        let max_item = stats.items.iter().map(|i| i.count).max().unwrap_or(0);
+        let mut units: Vec<_> = stats.units.iter().filter(|u| u.count > 0).collect();
+        units.sort_by(|a, b| b.count.cmp(&a.count));
+        let mut items: Vec<_> = stats.items.iter().filter(|i| i.count > 0 && i.count >= max_item / 1000).collect();
+        items.sort_by(|a, b| b.count.cmp(&a.count));
+        let keys: Vec<EntityKey> = units
+            .iter()
+            .map(|u| EntityKey { is_item: false, filter: f, id: u.id.clone() })
+            .chain(items.iter().map(|i| EntityKey { is_item: true, filter: f, id: i.id.clone() }))
+            .collect();
+        // 磁碟快取不在這裡讀（一次讀幾百個檔會卡一下畫面），點開時 ensure_entity 會讀
+        for k in keys {
+            if self.ent_requested.insert(k.clone()) {
+                self.ent_pending.insert(k.clone());
+                self.ent_loader.push_back(k);
+            }
         }
     }
 
@@ -344,6 +379,7 @@ impl eframe::App for App {
             self.timings.first_frame = Some(self.t0.elapsed());
         }
         self.handle_messages();
+        self.prefetch_entities();
         ui::top_bar(self, ctx);
         ui::status_bar(self, ctx);
         egui::CentralPanel::default().show(ctx, |ui| ui::central(self, ui));

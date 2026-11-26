@@ -594,15 +594,28 @@ pub(crate) fn icon(ui: &mut Ui, icons: &mut IconStore, url: Option<&str>, size: 
 }
 
 pub(crate) fn unit_icon(ui: &mut Ui, icons: &mut IconStore, st: &Statics, id: &str, size: f32) {
+    unit_icon_tip(ui, icons, st, id, size, st.name(id).to_string());
+}
+
+/// 英雄頭像，點了打開英雄詳細資料
+pub(crate) fn unit_icon_tip(ui: &mut Ui, icons: &mut IconStore, st: &Statics, id: &str, size: f32, tip: String) {
     let c = st.cost(id);
-    let r = icon(ui, icons, st.icon(id), size, Some(cost_color(c))).on_hover_text(st.name(id));
-    if r.clicked() && st.cost(id) > 0 {
-        icons.nav = Some(crate::app::Nav::Unit(id.to_string()));
+    let r = icon(ui, icons, st.icon(id), size, Some(cost_color(c))).on_hover_text(tip);
+    if c > 0 {
+        let r = r.on_hover_cursor(egui::CursorIcon::PointingHand);
+        if r.clicked() {
+            icons.nav = Some(crate::app::Nav::Unit(id.to_string()));
+        }
     }
 }
 
 pub(crate) fn item_icon(ui: &mut Ui, icons: &mut IconStore, st: &Statics, id: &str, size: f32) {
-    let r = icon(ui, icons, st.icon(id), size, None).on_hover_text(st.name(id));
+    item_icon_tip(ui, icons, st, id, size, st.name(id).to_string());
+}
+
+/// 裝備圖示，點了打開裝備詳細資料
+pub(crate) fn item_icon_tip(ui: &mut Ui, icons: &mut IconStore, st: &Statics, id: &str, size: f32, tip: String) {
+    let r = icon(ui, icons, st.icon(id), size, None).on_hover_text(tip).on_hover_cursor(egui::CursorIcon::PointingHand);
     if r.clicked() {
         icons.nav = Some(crate::app::Nav::Item(id.to_string()));
     }

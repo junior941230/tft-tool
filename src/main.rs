@@ -4,6 +4,7 @@ mod app;
 mod cache;
 mod data;
 mod detail;
+mod dpi;
 mod entity;
 mod model;
 mod net;
@@ -27,6 +28,7 @@ fn main() -> eframe::Result {
         "TFT 統計",
         options,
         Box::new(move |cc| {
+            dpi::install(cc);
             install_fonts(&cc.egui_ctx);
             Ok(Box::new(app::App::new(cc, t0)))
         }),

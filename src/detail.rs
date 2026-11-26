@@ -2,7 +2,7 @@
 
 use crate::app::{App, IconStore};
 use crate::model::*;
-use crate::ui::{cost_color, delta_color, fmt_int, icon, item_icon, place_color, tier_color, unit_icon};
+use crate::ui::{delta_color, fmt_int, icon, item_icon, item_icon_tip, place_color, tier_color, unit_icon, unit_icon_tip};
 use eframe::egui::{self, Color32, RichText, Sense, Ui};
 
 pub(crate) const BAR_PURPLE: Color32 = Color32::from_rgb(120, 100, 210);
@@ -94,8 +94,7 @@ fn unit_card(ui: &mut Ui, icons: &mut IconStore, st: &Statics, id: &str, star: u
         ui.set_width(50.0);
         ui.spacing_mut().item_spacing.y = 1.0;
         ui.label(if star >= 2 { stars(star) } else { RichText::new(" ").size(11.0) });
-        icon(ui, icons, st.icon(id), 48.0, Some(cost_color(st.cost(id))))
-            .on_hover_text(format!("{}（出現率 {:.0}%）", st.name(id), share * 100.0));
+        unit_icon_tip(ui, icons, st, id, 48.0, format!("{}（出現率 {:.0}%）", st.name(id), share * 100.0));
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 1.0;
             for it in items.iter().take(3) {
@@ -175,8 +174,7 @@ fn overview(ui: &mut Ui, icons: &mut IconStore, st: &Statics, c: &CompRow) {
                     ui.vertical(|ui| {
                         ui.set_width(44.0);
                         ui.spacing_mut().item_spacing.y = 1.0;
-                        icon(ui, icons, st.icon(item), 34.0, None)
-                            .on_hover_text(format!("{}（名次差 {:+.2}）", st.name(item), delta));
+                        item_icon_tip(ui, icons, st, item, 34.0, format!("{}（名次差 {:+.2}）", st.name(item), delta));
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 1.0;
                             for u in users.iter().take(2) {
@@ -229,7 +227,7 @@ fn overview(ui: &mut Ui, icons: &mut IconStore, st: &Statics, c: &CompRow) {
                 ui.spacing_mut().item_spacing.y = 1.0;
                 ui.vertical_centered(|ui| {
                     ui.label(stars(*star));
-                    icon(ui, icons, st.icon(u), 40.0, Some(cost_color(st.cost(u)))).on_hover_text(st.name(u));
+                    unit_icon(ui, icons, st, u, 40.0);
                     ui.label(RichText::new(format!("{:.1}%", share * 100.0)).small());
                     ui.label(RichText::new(format!("{place:.2}")).small().color(place_color(*place)));
                 });

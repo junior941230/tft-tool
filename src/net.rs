@@ -29,7 +29,7 @@ fn client() -> &'static reqwest::blocking::Client {
     static C: OnceLock<reqwest::blocking::Client> = OnceLock::new();
     C.get_or_init(|| {
         reqwest::blocking::Client::builder()
-            .user_agent("tft-tool/0.1")
+            .user_agent("tft-tool/0.1.1")
             .gzip(true)
             .brotli(true)
             .connect_timeout(Duration::from_secs(5))
@@ -70,14 +70,60 @@ pub fn entity_url(k: &EntityKey) -> String {
 }
 
 /// 背景抓單一英雄／裝備的詳細資料。
-pub fn fetch_entity(k: EntityKey, tx: Sender<Msg>, ctx: egui::Context) {
-    std::thread::spawn(move || {
-        let r = get(&entity_url(&k)).and_then(|b| data::parse_entity(&b));
-        if let Ok(d) = &r {
-            cache::save(&cache::entity_key(&k), d);
+/// 英雄／裝備詳細資料的背景佇列：使用者點開的排最前面，預載的排後面。
+/// 每筆先送出磁碟快取（若有），再從網路更新。
+pub struct EntityLoader {
+    queue: Arc<(Mutex<VecDeque<EntityKey>>, Condvar)>,
+}
+
+impl EntityLoader {
+    pub fn new(tx: Sender<Msg>, ctx: egui::Context, workers: usize) -> Self {
+        let queue: Arc<(Mutex<VecDeque<EntityKey>>, Condvar)> = Default::default();
+        for _ in 0..workers {
+            let q = queue.clone();
+            let tx = tx.clone();
+            let ctx = ctx.clone();
+            std::thread::spawn(move || loop {
+                let k = {
+                    let (lock, cv) = &*q;
+                    let mut g = lock.lock().unwrap();
+                    loop {
+                        if let Some(k) = g.pop_front() {
+                            break k;
+                        }
+                        g = cv.wait(g).unwrap();
+                    }
+                };
+                let r = get(&entity_url(&k)).and_then(|b| data::parse_entity(&b));
+                if let Ok(d) = &r {
+                    cache::save(&cache::entity_key(&k), d);
+                }
+                notify(&tx, &ctx, Msg::Entity(k, r));
+            });
         }
-        notify(&tx, &ctx, Msg::Entity(k, r));
-    });
+        Self { queue }
+    }
+
+    /// 排到最後（預載）
+    pub fn push_back(&self, k: EntityKey) {
+        let (lock, cv) = &*self.queue;
+        lock.lock().unwrap().push_back(k);
+        cv.notify_one();
+    }
+
+    /// 插到最前面；已經在佇列裡就移到最前面（使用者正在等）
+    pub fn push_front(&self, k: EntityKey) {
+        let (lock, cv) = &*self.queue;
+        let mut g = lock.lock().unwrap();
+        if let Some(i) = g.iter().position(|x| *x == k) {
+            if i == 0 {
+                return;
+            }
+            g.remove(i);
+        }
+        g.push_front(k);
+        cv.notify_one();
+    }
 }
 
 fn notify(tx: &Sender<Msg>, ctx: &egui::Context, m: Msg) {
